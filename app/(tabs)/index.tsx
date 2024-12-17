@@ -1,5 +1,12 @@
-import { StatusBar, StyleSheet, View, Platform } from "react-native";
-import { useState } from "react";
+import {
+  StatusBar,
+  StyleSheet,
+  View,
+  Platform,
+  Alert,
+  Linking,
+} from "react-native";
+import { useRef, useState } from "react";
 import {
   ButtonCustom,
   Gap,
@@ -10,8 +17,15 @@ import {
 } from "@/components";
 import * as ImagePicker from "expo-image-picker";
 import { type ImageSource } from "expo-image";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import React from "react";
+import * as MediaLibrary from "expo-media-library";
+import { captureRef } from "react-native-view-shot";
+import useDimensions from "@/hooks/useDimensions";
+import domToImage from "dom-to-image";
 
 export default function Home() {
+  // image picker
   const [selectedImage, setSelectedImage] = useState<ImageSource>(
     require("@/assets/images/default.png")
   );
@@ -32,23 +46,118 @@ export default function Home() {
     }
   }
 
+  // emoji modal and app options
   const [showAppOptions, setShowAppOptions] = useState(false);
   const [visibleModalSticker, setVisibleModalSticker] = useState(false);
   const closeModalSticker = () => setVisibleModalSticker(false);
-  const [selectedSticker, setSelectedSticker] = useState<
-    ImageSource | undefined
-  >();
+  const [selectedSticker, setSelectedSticker] = useState<ImageSource | null>();
+
+  // save media permission
+  const [status, requestPermission] = MediaLibrary.usePermissions();
+  async function onRequestPermissionLibrary(): Promise<boolean> {
+    try {
+      const status = await requestPermission();
+      if (status.granted) {
+        console.log("library permission granted.", status);
+        return true;
+      } else if (!status.canAskAgain) {
+        Alert.alert(
+          "Media Permission Required",
+          "Open app settings to grant your permission?",
+          [
+            {
+              text: "Open Settings",
+              onPress: async () => await Linking.openSettings(),
+            },
+            { text: "Cancel", style: "cancel" },
+          ]
+        );
+        return false;
+      } else return false;
+    } catch (error) {
+      console.log("error requesting media permission:", error);
+      return Promise.reject(error);
+    }
+  }
+
+  // save media
+  const imageRef = useRef<View>(null);
+  const { height, width } = useDimensions();
+  async function onSaveImage() {
+    try {
+      // for android and ios using
+      if (Platform.OS == "android" || Platform.OS == "ios") {
+        const hasPermission = await onRequestPermissionLibrary();
+        if (hasPermission) {
+          const localUri = await captureRef(imageRef, {
+            height: height - 400,
+            quality: 1,
+          });
+
+          await MediaLibrary.saveToLibraryAsync(localUri);
+          if (localUri) {
+            Alert.alert("", "Image saved!");
+          }
+        }
+      } else {
+        // for web
+        const dataUrl = await domToImage.toJpeg(imageRef.current as any, {
+          quality: 1,
+          width: width - 50,
+          height: height - 400,
+        });
+
+        let link = document.createElement("a");
+        link.download = "sticker-smash.jpeg";
+        link.href = dataUrl;
+        link.click();
+      }
+    } catch (error) {
+      console.log("error saving image:", error);
+    }
+  }
+
+  // reset to default image and remove selected sticker
+  function onReset() {
+    const reset = () => {
+      setSelectedImage(require("@/assets/images/default.png"));
+      setSelectedSticker(null);
+      setShowAppOptions(false);
+    };
+    if (
+      selectedImage != require("@/assets/images/default.png") ||
+      selectedSticker != null
+    ) {
+      Alert.alert("", "Discard changes?", [
+        {
+          text: "Discard",
+          onPress: () => reset(),
+        },
+        { text: "Cancel" },
+      ]);
+      if (Platform.OS == "web") {
+        const confirm = window.confirm("Discard changes?");
+        confirm && reset();
+      }
+    }
+  }
 
   return (
-    <View style={styles.container}>
-      <ImageViewer source={selectedImage} />
-      {selectedSticker && <StickerViewer source={selectedSticker} />}
+    <GestureHandlerRootView style={styles.container}>
+      <View ref={imageRef} collapsable={false}>
+        <ImageViewer source={selectedImage} />
+        {selectedSticker && <StickerViewer source={selectedSticker} />}
+      </View>
       <Gap flex={1} />
       {showAppOptions ? (
-        <ViewOptions onPressAddSticker={() => setVisibleModalSticker(true)} />
+        <ViewOptions
+          onPressAddSticker={() => setVisibleModalSticker(true)}
+          onPressSave={onSaveImage}
+          onPressReset={onReset}
+        />
       ) : (
         <View style={styles.viewImageSelection}>
-          <ButtonCustom title="Select a Image" onPress={onSelectImage} />
+          <ButtonCustom title="Select an Image" onPress={onSelectImage} />
           <ButtonCustom
             title="Use this Image"
             primary={false}
@@ -57,7 +166,6 @@ export default function Home() {
         </View>
       )}
       <Gap flex={0.25} />
-      {Platform.OS == "ios" && <StatusBar barStyle={"light-content"} />}
 
       <ModalSticker
         visible={visibleModalSticker}
@@ -67,7 +175,8 @@ export default function Home() {
           closeModalSticker();
         }}
       />
-    </View>
+      {Platform.OS == "ios" && <StatusBar barStyle={"light-content"} />}
+    </GestureHandlerRootView>
   );
 }
 

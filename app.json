@@ -13,14 +13,16 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      }
+        "foregroundImage": "./assets/images/adaptive_icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.exkoi.dev.StickerKoiSmash"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "StickerKoiSmash"
     },
     "plugins": [
       "expo-router",
@@ -36,6 +38,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "2269bf77-43c3-435c-bd82-449c8286b7e8"
+      }
     }
   }
 }
